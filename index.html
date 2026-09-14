@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>Spinning cue</title>
+<style>
+:root{
+  --bg:#0e0e0f; --panel:#151517; --line:#2a2a2c; --fg:#f2f2f0; --dim:#c9c9c4; --mut:#8f8f8a; --faint:#6f6f6b;
+  --recovery-bg:#042C53; --recovery-fg:#85B7EB; --recovery-mid:#378ADD;
+  --flat-bg:#173404;    --flat-fg:#C0DD97;    --flat-mid:#97C459;
+  --hill-bg:#412402;    --hill-fg:#FAC775;    --hill-mid:#EF9F27;
+  --sprint-bg:#501313;  --sprint-fg:#F09595;  --sprint-mid:#E24B4A;
+  --none-bg:#1c1c1e;    --none-fg:#c9c9c4;    --none-mid:#5F5E5A;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  overscroll-behavior:none}
+body{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--fg);background:#0a0a0b;border:1px solid var(--line);
+  border-radius:8px;padding:8px 10px;width:100%}
+textarea{resize:vertical;min-height:60px}
+label{display:block;font-size:12px;color:var(--mut);margin:0 0 4px}
+.row{display:flex;gap:8px}
+.row>*{flex:1;min-width:0}
+.btn{border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:center;background:#1a1a1c}
+.btn:active{transform:scale(.98)}
+.btn-primary{background:#1DB954;color:#06210f;border-color:#1DB954;font-weight:600}
+.btn-wide{width:100%}
+.bar{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.bar h1{font-size:15px;font-weight:500;margin:0}
+.pad{padding:14px}
+.muted{color:var(--mut);font-size:13px;line-height:1.5}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.err{background:#3a1414;border:1px solid #7a2a2a;color:#ffd7d7;border-radius:10px;padding:10px 12px;
+  font-size:13px;line-height:1.5;margin:10px 14px}
+
+/* ---------- main screen ---------- */
+#screen-main{display:flex;flex-direction:column;min-height:100dvh}
+#mainTop{display:flex;justify-content:space-between;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line)}
+#mainTop .left{display:flex;align-items:center;gap:7px;min-width:0}
+#dot{width:8px;height:8px;border-radius:50%;background:#97C459;flex:none}
+#dot.off{background:#5F5E5A}
+#plName{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#counter{font-size:13px;color:var(--mut);flex:none;margin-left:8px}
+
+#hero{display:flex;align-items:center;border-bottom:1px solid var(--line);background:var(--none-bg)}
+#heroL{flex:1.35;padding:14px 6px 14px 16px;min-width:0}
+#heroSep{width:1px;align-self:stretch;margin:14px 0;background:rgba(255,255,255,.10)}
+#heroR{flex:1;padding:14px 16px 14px 12px;min-width:0}
+.heroLbl{font-size:11px;letter-spacing:.02em;opacity:.85}
+#trackLeft{font-size:44px;line-height:1.05;margin-top:1px}
+#segName{font-size:20px;font-weight:600;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#segIdx{font-size:14px;font-weight:500;opacity:.8}
+#segMeta{font-size:12px;margin-top:3px;opacity:.85}
+#segLeft{font-size:21px;line-height:1.2;margin-top:1px}
+
+#metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid var(--line)}
+#metrics>div{padding:10px 2px;text-align:center}
+#metrics>div+div{border-left:1px solid var(--line)}
+.mval{font-size:24px;line-height:1.1}
+.mlbl{font-size:11px;color:var(--mut);margin-top:2px}
+
+#cue{padding:13px 16px;font-size:16px;line-height:1.5;border-bottom:1px solid var(--line);
+  min-height:74px;white-space:pre-wrap}
+
+#prog{padding:10px 16px;border-bottom:1px solid var(--line)}
+#progBar{display:flex;gap:2px;height:5px}
+#progBar .seg{background:var(--line);border-radius:2px;flex:1}
+#progMeta{display:flex;justify-content:space-between;margin-top:6px;gap:10px}
+#trackName{font-size:13px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#trackDur{font-size:13px;color:var(--mut);flex:none}
+
+#next{padding:8px 16px;border-bottom:1px solid var(--line)}
+.nrow{display:flex;align-items:center;gap:9px;padding:4px 0}
+.nrow .tick{width:3px;height:28px;flex:none;background:var(--none-mid)}
+.nrow .txt{flex:1;min-width:0}
+.nrow .t1{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .t2{font-size:11px}
+.nrow .when{font-size:13px;color:var(--mut);flex:none}
+.nrow.dim{opacity:.55}
+#profToggle{display:block;width:100%;text-align:center;color:var(--faint);font-size:12px;padding:6px 0 2px}
+
+#full{border-bottom:1px solid var(--line);max-height:46dvh;overflow:auto}
+.frow{display:flex;align-items:center;gap:9px;padding:7px 16px}
+.frow.cur{background:#1a1a1c}
+.frow .tick{width:3px;height:20px;flex:none}
+.frow .n{font-size:12px;color:var(--mut);width:24px;flex:none}
+.frow .nm{font-size:13px;color:var(--dim);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frow .sg{font-size:12px;flex:none}
+.frow .du{font-size:12px;color:var(--faint);width:44px;text-align:right;flex:none}
+
+#controls{margin-top:auto;display:grid;grid-template-columns:1fr 1fr 1.7fr;border-top:1px solid var(--line)}
+#controls button{padding:18px 4px;font-size:15px;color:var(--dim)}
+#controls button+button{border-left:1px solid var(--line)}
+#btnNext{color:var(--fg)}
+#controls button:disabled{opacity:.4}
+
+#notice{padding:10px 16px;font-size:13px;color:#FAC775;background:#2a1d05;border-bottom:1px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ============ SETUP ============ -->
+<section id="screen-setup" class="hidden">
+  <div class="bar"><h1>Spinning cue — nastavení</h1></div>
+  <div class="pad">
+    <div class="card">
+      <label for="clientId">Spotify Client ID</label>
+      <input id="clientId" placeholder="32 znaků z Developer Dashboard" autocomplete="off" spellcheck="false">
+      <p class="muted" style="margin:8px 0 0">Redirect URI, který zadej do Spotify aplikace:</p>
+      <p class="mono" id="redirUri" style="font-size:12px;color:var(--dim);word-break:break-all;margin:4px 0 0"></p>
+    </div>
+    <button id="btnLogin" class="btn btn-primary btn-wide">Přihlásit ke Spotify</button>
+    <div class="card" style="margin-top:14px">
+      <label for="profileUrl">URL na profily (JSON) — nepovinné</label>
+      <input id="profileUrl" placeholder="https://…/profily.json" autocomplete="off" spellcheck="false">
+      <div class="row" style="margin-top:8px">
+        <button id="btnFetchUrl" class="btn">Načíst z URL</button>
+        <button id="btnGoProfiles" class="btn">Profily</button>
+      </div>
+    </div>
+    <p class="muted">Ovládání přehrávání vyžaduje Spotify Premium. Na začátku hodiny pusť
+      přehrávání jednou přímo ve Spotify, jinak API nemá aktivní zařízení.</p>
+  </div>
+</section>
+
+<!-- ============ MAIN ============ -->
+<section id="screen-main" class="hidden">
+  <div id="mainTop">
+    <div class="left"><span id="dot"></span><span id="plName">—</span></div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="counter" class="mono">–/–</span>
+      <button id="btnMenu" style="color:var(--mut);font-size:18px;padding:0 2px">≡</button>
+    </div>
+  </div>
+
+  <div id="notice" class="hidden"></div>
+
+  <div id="hero">
+    <div id="heroL">
+      <div class="heroLbl" id="heroLblL">do konce skladby</div>
+      <div id="trackLeft" class="mono">–:––</div>
+    </div>
+    <div id="heroSep"></div>
+    <div id="heroR">
+      <div id="segName">—<span id="segIdx" class="hidden"></span></div>
+      <div id="segMeta"></div>
+      <div id="segLeftWrap" class="hidden">
+        <div class="heroLbl">do konce segmentu</div>
+        <div id="segLeft" class="mono">–:––</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="metrics">
+    <div><div class="mval mono" id="mCad">–</div><div class="mlbl">kadence</div></div>
+    <div><div class="mval" id="mPos">–</div><div class="mlbl">pozice</div></div>
+    <div><div class="mval mono" id="mRpe">–</div><div class="mlbl">RPE</div></div>
+  </div>
+
+  <div id="cue"></div>
+
+  <div id="prog">
+    <div id="progBar"></div>
+    <div id="progMeta"><span id="trackName">—</span><span id="trackDur" class="mono">–:––</span></div>
+  </div>
+
+  <div id="next">
+    <div class="nrow" id="n1"><span class="tick"></span><div class="txt"><div class="t1"></div><div class="t2"></div></div><span class="when mono"></span></div>
+    <div class="nrow dim" id="n2"><span class="tick"></span><div class="txt"><div class="t1"></div><div class="t2"></div></div><span class="when mono"></span></div>
+    <button id="profToggle">Celý profil ⌄</button>
+  </div>
+
+  <div id="full" class="hidden"></div>
+
+  <div id="controls">
+    <button id="btnPrev">⏮</button>
+    <button id="btnPlay">⏸</button>
+    <button id="btnNext">Další ⏭</button>
+  </div>
+</section>
+
+<!-- ============ PROFILES ============ -->
+<section id="screen-profiles" class="hidden">
+  <div class="bar">
+    <h1>Profily hodin</h1>
+    <button id="btnProfBack" style="color:var(--mut)">Zpět</button>
+  </div>
+  <div class="pad">
+    <div id="profList"></div>
+    <div class="card">
+      <label for="newPlaylist">Nový profil z playlistu</label>
+      <input id="newPlaylist" placeholder="odkaz nebo URI playlistu" autocomplete="off" spellcheck="false">
+      <button id="btnBuild" class="btn btn-wide" style="margin-top:8px">Načíst skladby a vytvořit kostru</button>
+      <button id="btnBuildCurrent" class="btn btn-wide" style="margin-top:8px">Použít právě hrající playlist</button>
+    </div>
+    <div class="row">
+      <button id="btnExport" class="btn">Export JSON</button>
+      <button id="btnImport" class="btn">Import JSON</button>
+    </div>
+    <input id="fileImport" type="file" accept="application/json,.json" class="hidden">
+    <button id="btnSetup" class="btn btn-wide" style="margin-top:10px">Nastavení a přihlášení</button>
+  </div>
+</section>
+
+<!-- ============ EDITOR ============ -->
+<section id="screen-editor" class="hidden">
+  <div class="bar">
+    <h1 id="edTitle">Editor</h1>
+    <button id="btnEdBack" style="color:var(--mut)">Hotovo</button>
+  </div>
+  <div class="pad">
+    <div class="card">
+      <label for="edName">Název hodiny</label>
+      <input id="edName">
+    </div>
+    <div id="edTracks"></div>
+  </div>
+</section>
+
+<script>
+"use strict";
+
+/* ============================ konstanty ============================ */
+const SCOPES = "user-read-playback-state user-modify-playback-state playlist-read-private playlist-modify-private";
+const AUTH = "https://accounts.spotify.com/authorize";
+const TOKEN = "https://accounts.spotify.com/api/token";
+const API = "https://api.spotify.com/v1";
+const POLL_MS = 3000;
+const TICK_MS = 250;
+
+const TYPES = {
+  recovery:{label:"Regenerace", cad:88, pos:"Sed", rpe:4},
+  flat:    {label:"Rovina",     cad:95, pos:"Sed", rpe:6},
+  hill:    {label:"Kopec",      cad:70, pos:"Sed", rpe:7},
+  sprint:  {label:"Sprint",     cad:110,pos:"Sed", rpe:9}
+};
+const redirectUri = location.origin + location.pathname;
+
+/* ============================ úložiště ============================ */
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem("sc."+k); return v===null?d:JSON.parse(v);}catch(e){return d;} },
+  set(k, v){ try{ localStorage.setItem("sc."+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem("sc."+k); }catch(e){} }
+};
+
+let clientId = LS.get("clientId","");
+let tokens   = LS.get("tokens",null);        // {access, refresh, expiresAt}
+let profiles = LS.get("profiles",{});        // { playlistUri: profile }
+let profileUrl = LS.get("profileUrl","");
+
+/* ============================ stav běhu ============================ */
+const S = {
+  ctxUri:null, trackUri:null, trackName:"", artist:"", durationMs:0,
+  progressMs:0, syncedAt:0, playing:false,
+  profile:null, trackIndex:-1, offProfile:false,
+  deviceMissing:false, lastError:"", fullOpen:false, busy:false
+};
+
+/* ============================ pomocné ============================ */
+const $ = s => document.querySelector(s);
+const fmt = ms => { if(ms==null||isNaN(ms)||ms<0) ms=0; const t=Math.round(ms/1000);
+  return Math.floor(t/60)+":"+String(t%60).padStart(2,"0"); };
+const parseMs = str => { const m=String(str||"").trim().match(/^(\d+):([0-5]?\d)$/);
+  return m ? (+m[1]*60 + +m[2])*1000 : null; };
+function show(id){ ["setup","main","profiles","editor"].forEach(n =>
+  $("#screen-"+n).classList.toggle("hidden", n!==id)); }
+function playlistId(s){ const m=String(s||"").match(/playlist[:/]([A-Za-z0-9]+)/); return m?m[1]:null; }
+
+/* ============================ PKCE ============================ */
+function randStr(n){ const a=new Uint8Array(n); crypto.getRandomValues(a);
+  return Array.from(a,b=>"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"[b%66]).join(""); }
+async function challenge(v){
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
+  return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function login(){
+  if(!clientId){ alert("Nejdřív vyplň Client ID."); return; }
+  const v = randStr(64);
+  LS.set("verifier", v);
+  const p = new URLSearchParams({ client_id:clientId, response_type:"code", redirect_uri:redirectUri,
+    scope:SCOPES, code_challenge_method:"S256", code_challenge: await challenge(v) });
+  location.href = AUTH + "?" + p.toString();
+}
+async function exchangeCode(code){
+  const v = LS.get("verifier","");
+  const body = new URLSearchParams({ client_id:clientId, grant_type:"authorization_code",
+    code, redirect_uri:redirectUri, code_verifier:v });
+  const r = await fetch(TOKEN,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});
+  if(!r.ok) throw new Error("Výměna kódu selhala ("+r.status+")");
+  const j = await r.json();
+  tokens = { access:j.access_token, refresh:j.refresh_token, expiresAt: Date.now()+(j.expires_in-60)*1000 };
+  LS.set("tokens", tokens); LS.del("verifier");
+}
+async function refresh(){
+  if(!tokens || !tokens.refresh) throw new Error("Chybí refresh token");
+  const body = new URLSearchParams({ client_id:clientId, grant_type:"refresh_token", refresh_token:tokens.refresh });
+  const r = await fetch(TOKEN,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});
+  if(!r.ok){ tokens=null; LS.del("tokens"); throw new Error("Obnova přihlášení selhala"); }
+  const j = await r.json();
+  tokens.access = j.access_token;
+  if(j.refresh_token) tokens.refresh = j.refresh_token;
+  tokens.expiresAt = Date.now()+(j.expires_in-60)*1000;
+  LS.set("tokens", tokens);
+}
+async function api(path, opt){
+  opt = opt || {};
+  if(!tokens) throw new Error("Nepřihlášeno");
+  if(Date.now() > tokens.expiresAt) await refresh();
+  const r = await fetch(API+path, Object.assign({}, opt, {
+    headers: Object.assign({ Authorization:"Bearer "+tokens.access }, opt.headers||{}) }));
+  if(r.status===401){ await refresh(); return api(path, opt); }
+  if(r.status===204) return null;
+  if(r.status===404) { const e=new Error("NO_DEVICE"); e.code=404; throw e; }
+  if(r.status===403) { const e=new Error("PREMIUM"); e.code=403; throw e; }
+  if(r.status===429) { const e=new Error("RATE"); e.code=429; throw e; }
+  if(!r.ok) throw new Error("API "+r.status);
+  const t = await r.text();
+  return t ? JSON.parse(t) : null;
+}
+
+/* ============================ segmenty ============================ */
+function normSegs(track){
+  const dur = track.durationMs||0;
+  let segs = (track.segments||[]).slice().filter(Boolean);
+  if(!segs.length) return [{ type:"none", label:"—", startMs:0, endMs:dur, cadence:null, position:null, rpe:null, cue:"" }];
+  segs.sort((a,b)=>(a.startMs||0)-(b.startMs||0));
+  return segs.map((s,i)=>{
+    const next = segs[i+1];
+    const end = (s.endMs!=null && s.endMs>0) ? s.endMs : (next ? (next.startMs||0) : dur);
+    return Object.assign({}, s, { startMs:s.startMs||0, endMs:Math.min(end||dur, dur||end) });
+  });
+}
+function typeOf(seg){ return TYPES[seg.type] ? seg.type : "none"; }
+function colorVars(t){ return { bg:`var(--${t}-bg)`, fg:`var(--${t}-fg)`, mid:`var(--${t}-mid)` }; }
+
+/* Vrátí { cur, curIdx, segs, upcoming:[{seg,trackIdx,startsIn,sameTrack}] } */
+function timeline(profile, trackIdx, progressMs){
+  const segs = normSegs(profile.tracks[trackIdx]);
+  let curIdx = segs.findIndex(s => progressMs >= s.startMs && progressMs < s.endMs);
+  if(curIdx < 0) curIdx = progressMs >= (segs[segs.length-1].endMs||0) ? segs.length-1 : 0;
+  const up = [];
+  let base = -progressMs;
+  for(let t = trackIdx; t < profile.tracks.length && up.length < 6; t++){
+    const tr = profile.tracks[t];
+    const ss = (t === trackIdx) ? segs : normSegs(tr);
+    for(let i = 0; i < ss.length; i++){
+      /* v aktuální skladbě vynech všechno až po právě běžící segment;
+         z dalších skladeb ber vše — i když do nich zbývá pár desetin vteřiny */
+      if(t === trackIdx && i <= curIdx) continue;
+      up.push({ seg:ss[i], trackIdx:t, startsIn: Math.max(0, base + ss[i].startMs), sameTrack: t===trackIdx });
+    }
+    base += (tr.durationMs||0);
+  }
+  return { segs, curIdx, cur: segs[curIdx], upcoming: up };
+}
+
+/* ============================ přehrávač ============================ */
+function localProgress(){
+  if(!S.playing) return S.progressMs;
+  return Math.min(S.durationMs||0, S.progressMs + (Date.now() - S.syncedAt));
+}
+async function poll(){
+  if(!tokens) return;
+  try{
+    const p = await api("/me/player");
+    S.deviceMissing = false;
+    if(!p || !p.item){ S.deviceMissing = true; S.playing = false; return; }
+    S.ctxUri = p.context ? p.context.uri : null;
+    S.trackUri = p.item.uri;
+    S.trackName = p.item.name || "";
+    S.artist = (p.item.artists||[]).map(a=>a.name).join(", ");
+    S.durationMs = p.item.duration_ms || 0;
+    S.progressMs = p.progress_ms || 0;
+    S.syncedAt = Date.now();
+    S.playing = !!p.is_playing;
+    S.lastError = "";
+    pickProfile();
+  }catch(e){
+    if(e.code===404){ S.deviceMissing = true; S.playing=false; }
+    else S.lastError = e.message==="PREMIUM" ? "Spotify Premium je potřeba na ovládání." : "";
+  }
+}
+function pickProfile(){
+  let prof = S.ctxUri ? profiles[S.ctxUri] : null;
+  if(!prof && S.profile) prof = S.profile;           // ruční volba zůstává
+  S.profile = prof || null;
+  S.trackIndex = -1; S.offProfile = false;
+  if(!S.profile){ S.offProfile = true; return; }
+  const i = S.profile.tracks.findIndex(t => t.uri === S.trackUri);
+  if(i < 0) S.offProfile = true; else S.trackIndex = i;
+}
+async function cmd(fn){
+  if(S.busy) return;
+  S.busy = true; render();
+  try{ await fn(); await new Promise(r=>setTimeout(r,700)); await poll(); }
+  catch(e){
+    if(e.code===404) S.deviceMissing = true;
+    else if(e.message==="PREMIUM") S.lastError = "Ovládání vyžaduje Premium.";
+    else S.lastError = "Příkaz se nepovedl.";
+  }
+  S.busy = false; render();
+}
+const doNext = () => cmd(() => api("/me/player/next",{method:"POST"}));
+const doPrev = () => cmd(() => api("/me/player/previous",{method:"POST"}));
+const doPlay = () => cmd(() => api("/me/player/"+(S.playing?"pause":"play"),{method:"PUT"}));
+async function shuffleOff(){ try{ await api("/me/player/shuffle?state=false",{method:"PUT"}); }catch(e){} }
+
+/* ============================ vykreslení ============================ */
+function setHero(t){
+  const c = colorVars(t);
+  $("#hero").style.background = c.bg;
+  $("#heroLblL").style.color = c.mid;
+  $("#trackLeft").style.color = c.fg;
+  $("#segName").style.color = c.fg;
+  $("#segMeta").style.color = c.mid;
+  $("#segLeft").style.color = c.fg;
+  const lbl = $("#segLeftWrap").querySelector(".heroLbl"); if(lbl) lbl.style.color = c.mid;
+}
+function render(){
+  if(!tokens){ show("setup"); return; }
+  show("main");
+
+  const nt = $("#notice");
+  let msg = "";
+  if(S.deviceMissing) msg = "Spotify nemá aktivní zařízení. Pusť přehrávání jednou přímo v aplikaci Spotify.";
+  else if(S.lastError) msg = S.lastError;
+  nt.textContent = msg; nt.classList.toggle("hidden", !msg);
+
+  $("#dot").classList.toggle("off", !S.playing);
+  $("#btnPlay").textContent = S.playing ? "⏸" : "▶";
+  [$("#btnPrev"),$("#btnPlay"),$("#btnNext")].forEach(b=>b.disabled = S.busy);
+
+  $("#trackName").textContent = S.trackName ? (S.trackName + (S.artist?" · "+S.artist:"")) : "—";
+  $("#trackDur").textContent = fmt(S.durationMs);
+
+  const prog = localProgress();
+  $("#trackLeft").textContent = fmt((S.durationMs||0) - prog);
+
+  /* mimo profil */
+  if(!S.profile || S.offProfile || S.trackIndex < 0){
+    $("#plName").textContent = S.profile ? S.profile.name : "mimo profil";
+    $("#counter").textContent = "–/–";
+    setHero("none");
+    $("#segName").textContent = "mimo profil";
+    $("#segIdx").classList.add("hidden");
+    $("#segMeta").textContent = S.profile ? "skladba není v profilu" : "pro tenhle playlist není profil";
+    $("#segLeftWrap").classList.add("hidden");
+    $("#mCad").textContent = "–"; $("#mPos").textContent = "–"; $("#mRpe").textContent = "–";
+    $("#cue").textContent = "";
+    $("#progBar").innerHTML = '<div class="seg"></div>';
+    ["#n1","#n2"].forEach(id=>{ const r=$(id); r.querySelector(".t1").textContent="";
+      r.querySelector(".t2").textContent=""; r.querySelector(".when").textContent="";
+      r.querySelector(".tick").style.background="var(--none-mid)"; });
+    $("#full").innerHTML = "";
+    return;
+  }
+
+  const P = S.profile;
+  const tl = timeline(P, S.trackIndex, prog);
+  const cur = tl.cur, t = typeOf(cur);
+  const meta = TYPES[t] || {label:"—"};
+
+  $("#plName").textContent = P.name || "hodina";
+  $("#counter").textContent = (S.trackIndex+1) + "/" + P.tracks.length;
+
+  setHero(t);
+  $("#segName").childNodes[0].nodeValue = (cur.label || meta.label) + " ";
+  const many = tl.segs.length > 1;
+  const si = $("#segIdx");
+  si.classList.toggle("hidden", !many);
+  if(many) si.textContent = (tl.curIdx+1) + "/" + tl.segs.length;
+
+  const cad = cur.cadence!=null?cur.cadence:meta.cad;
+  const pos = cur.position||meta.pos||"–";
+  const rpe = cur.rpe!=null?cur.rpe:meta.rpe;
+  $("#segMeta").textContent = [cad?cad:null, pos, rpe!=null?("RPE "+rpe):null].filter(Boolean).join(" · ");
+
+  /* druhý odpočet jen když skladba má víc segmentů */
+  $("#segLeftWrap").classList.toggle("hidden", !many);
+  if(many) $("#segLeft").textContent = fmt(cur.endMs - prog);
+
+  $("#mCad").textContent = cad!=null?cad:"–";
+  $("#mPos").textContent = pos;
+  $("#mRpe").textContent = rpe!=null?rpe:"–";
+  $("#cue").textContent = cur.cue || "";
+
+  /* ukazatel skladby — dělený podle segmentů */
+  const pb = $("#progBar"); pb.innerHTML = "";
+  const dur = S.durationMs || 1;
+  tl.segs.forEach((s,i)=>{
+    const d = document.createElement("div");
+    d.className = "seg";
+    d.style.flex = Math.max(1, Math.round(((s.endMs - s.startMs)/dur)*100));
+    if(i < tl.curIdx) d.style.background = "#888780";
+    else if(i === tl.curIdx){
+      const w = Math.max(0, Math.min(1, (prog - s.startMs)/Math.max(1,(s.endMs - s.startMs))));
+      d.style.background = `linear-gradient(to right, ${getComputedStyle(document.documentElement)
+        .getPropertyValue("--"+t+"-mid").trim()} ${Math.round(w*100)}%, var(--line) ${Math.round(w*100)}%)`;
+    }
+    if(i===0) d.style.borderRadius = "2px 0 0 2px";
+    if(i===tl.segs.length-1) d.style.borderRadius = "0 2px 2px 0";
+    pb.appendChild(d);
+  });
+
+  /* co přijde dál */
+  [["#n1",0],["#n2",1]].forEach(([id,k])=>{
+    const row = $(id), u = tl.upcoming[k];
+    const t1 = row.querySelector(".t1"), t2 = row.querySelector(".t2"), wh = row.querySelector(".when");
+    if(!u){ t1.textContent=""; t2.textContent=""; wh.textContent=""; row.querySelector(".tick").style.background="transparent"; return; }
+    const ut = typeOf(u.seg), um = TYPES[ut]||{label:"—"};
+    const c = getComputedStyle(document.documentElement);
+    row.querySelector(".tick").style.background = c.getPropertyValue("--"+ut+"-mid").trim();
+    const tr = P.tracks[u.trackIdx];
+    t1.textContent = u.sameTrack ? "v téže skladbě" : (tr.name + (tr.artist?" · "+tr.artist:""));
+    t1.style.color = u.sameTrack ? "var(--mut)" : "var(--fg)";
+    const uc = u.seg.cadence!=null?u.seg.cadence:um.cad;
+    const ur = u.seg.rpe!=null?u.seg.rpe:um.rpe;
+    t2.textContent = [(u.seg.label||um.label), uc?uc:null, ur!=null?("RPE "+ur):null].filter(Boolean).join(" · ");
+    t2.style.color = c.getPropertyValue("--"+ut+"-fg").trim();
+    wh.textContent = fmt(u.startsIn);
+  });
+
+  /* celý profil */
+  const full = $("#full");
+  full.classList.toggle("hidden", !S.fullOpen);
+  $("#profToggle").textContent = S.fullOpen ? "Skrýt profil ⌃" : "Celý profil ⌄";
+  if(S.fullOpen){
+    const c = getComputedStyle(document.documentElement);
+    full.innerHTML = P.tracks.map((tr,i)=>{
+      const ss = normSegs(tr), first = ss[0], ft = typeOf(first), fm = TYPES[ft]||{label:"—"};
+      const cadi = first.cadence!=null?first.cadence:fm.cad;
+      return `<div class="frow${i===S.trackIndex?" cur":""}">
+        <span class="tick" style="background:${c.getPropertyValue("--"+ft+"-mid").trim()}"></span>
+        <span class="n mono">${i+1}</span>
+        <span class="nm">${escapeHtml(tr.name||"")}</span>
+        <span class="sg" style="color:${c.getPropertyValue("--"+ft+"-fg").trim()}">${escapeHtml(first.label||fm.label)}${cadi?" · "+cadi:""}${ss.length>1?" ×"+ss.length:""}</span>
+        <span class="du mono">${fmt(tr.durationMs)}</span></div>`;
+    }).join("");
+    const cr = full.querySelector(".frow.cur"); if(cr) cr.scrollIntoView({block:"center"});
+  }
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
+
+/* ============================ profily ============================ */
+function saveProfiles(){ LS.set("profiles", profiles); }
+function renderProfiles(){
+  const box = $("#profList");
+  const keys = Object.keys(profiles);
+  if(!keys.length){ box.innerHTML = '<p class="muted">Zatím žádný profil.</p>'; return; }
+  box.innerHTML = keys.map(k=>{
+    const p = profiles[k];
+    return `<div class="card"><div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+      <div style="min-width:0"><div style="font-size:15px">${escapeHtml(p.name||"hodina")}</div>
+      <div class="muted">${p.tracks.length} skladeb</div></div>
+      <div style="display:flex;gap:8px;flex:none">
+        <button class="btn" data-use="${escapeHtml(k)}">Jet</button>
+        <button class="btn" data-edit="${escapeHtml(k)}">Upravit</button>
+        <button class="btn" data-del="${escapeHtml(k)}">×</button>
+      </div></div></div>`;
+  }).join("");
+  box.querySelectorAll("[data-use]").forEach(b=>b.onclick=()=>{ S.profile = profiles[b.dataset.use]; pickProfile(); show("main"); render(); });
+  box.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEditor(b.dataset.edit));
+  box.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{
+    if(confirm("Smazat profil?")){ delete profiles[b.dataset.del]; saveProfiles(); renderProfiles(); } });
+}
+async function buildFromPlaylist(idOrUri){
+  const id = playlistId(idOrUri);
+  if(!id){ alert("Nerozpoznal jsem ID playlistu."); return; }
+  let items = [], url = "/playlists/"+id+"/items?limit=50";
+  try{
+    while(url){
+      const j = await api(url.replace(API,""));
+      const arr = j.items || j.tracks || [];
+      arr.forEach(it => { const tr = it.item || it.track; if(tr && tr.uri) items.push(tr); });
+      url = j.next ? j.next.replace(API,"") : null;
+    }
+  }catch(e){ alert("Načtení playlistu selhalo: "+e.message); return; }
+  if(!items.length){ alert("Playlist je prázdný nebo nedostupný."); return; }
+  let meta = {name:"Nová hodina"};
+  try{ meta = await api("/playlists/"+id+"?fields=name"); }catch(e){}
+  const prof = {
+    version:1, name: meta.name || "Nová hodina", playlistUri: "spotify:playlist:"+id,
+    tracks: items.map(t => ({ uri:t.uri, name:t.name, artist:(t.artists||[]).map(a=>a.name).join(", "),
+      durationMs:t.duration_ms, segments:[{ type:"flat", label:"Rovina", startMs:0, endMs:null,
+      cadence:95, position:"Sed", rpe:5, cue:"" }] }))
+  };
+  profiles[prof.playlistUri] = prof; saveProfiles();
+  openEditor(prof.playlistUri);
+}
+
+/* ============================ editor ============================ */
+let edKey = null;
+function openEditor(key){
+  edKey = key; const p = profiles[key];
+  $("#edTitle").textContent = "Editor — " + (p.name||"");
+  $("#edName").value = p.name || "";
+  $("#edName").oninput = e => { p.name = e.target.value; saveProfiles(); };
+  const box = $("#edTracks");
+  box.innerHTML = p.tracks.map((tr,i)=>`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <div style="min-width:0"><div style="font-size:14px">${i+1}. ${escapeHtml(tr.name||"")}</div>
+        <div class="muted">${escapeHtml(tr.artist||"")} · ${fmt(tr.durationMs)}</div></div>
+        <button class="btn" data-add="${i}" style="flex:none">+ segment</button>
+      </div>
+      <div data-segs="${i}"></div>
+    </div>`).join("");
+  p.tracks.forEach((tr,i)=>renderSegs(p,i));
+  box.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.add, tr=p.tracks[i], last=(tr.segments||[]).slice(-1)[0];
+    const start = last ? Math.min((last.startMs||0)+60000, tr.durationMs-1000) : 0;
+    tr.segments = (tr.segments||[]).concat([{ type:"sprint", label:"Sprint", startMs:start, endMs:null,
+      cadence:110, position:"Sed", rpe:9, cue:"" }]);
+    saveProfiles(); renderSegs(p,i);
+  });
+  show("editor");
+}
+function renderSegs(p, ti){
+  const tr = p.tracks[ti];
+  const host = document.querySelector(`[data-segs="${ti}"]`);
+  const segs = tr.segments || [];
+  host.innerHTML = segs.map((s,j)=>`
+    <div style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">
+      <div class="row">
+        <div><label>Typ</label><select data-f="type" data-j="${j}">
+          ${Object.keys(TYPES).map(k=>`<option value="${k}"${s.type===k?" selected":""}>${TYPES[k].label}</option>`).join("")}
+        </select></div>
+        <div><label>Popisek</label><input data-f="label" data-j="${j}" value="${escapeHtml(s.label||"")}"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>Start (m:ss)</label><input data-f="startMs" data-j="${j}" value="${fmt(s.startMs||0)}"></div>
+        <div><label>Kadence</label><input data-f="cadence" data-j="${j}" inputmode="numeric" value="${s.cadence!=null?s.cadence:""}"></div>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>Pozice</label><select data-f="position" data-j="${j}">
+          ${["Sed","Stoj","Střídavě"].map(v=>`<option${s.position===v?" selected":""}>${v}</option>`).join("")}
+        </select></div>
+        <div><label>RPE</label><input data-f="rpe" data-j="${j}" inputmode="numeric" value="${s.rpe!=null?s.rpe:""}"></div>
+      </div>
+      <div style="margin-top:8px"><label>Text cue</label>
+        <textarea data-f="cue" data-j="${j}">${escapeHtml(s.cue||"")}</textarea></div>
+      ${segs.length>1?`<button class="btn btn-wide" data-rm="${j}" style="margin-top:8px">Odebrat segment</button>`:""}
+    </div>`).join("");
+  host.querySelectorAll("[data-f]").forEach(el=>{
+    el.onchange = () => {
+      const j = +el.dataset.j, f = el.dataset.f, seg = tr.segments[j];
+      if(f==="startMs"){ const v = parseMs(el.value); if(v==null){ el.value = fmt(seg.startMs||0); return; }
+        seg.startMs = Math.max(0, Math.min(v, (tr.durationMs||0)-1000)); el.value = fmt(seg.startMs); }
+      else if(f==="cadence"||f==="rpe"){ const n = parseInt(el.value,10); seg[f] = isNaN(n)?null:n; }
+      else if(f==="type"){ seg.type = el.value; if(!seg.label || TYPES[seg.label]) seg.label = TYPES[el.value].label; }
+      else seg[f] = el.value;
+      saveProfiles(); renderSegs(p, ti);
+    };
+  });
+  host.querySelectorAll("[data-rm]").forEach(b=>b.onclick=()=>{
+    tr.segments.splice(+b.dataset.rm,1); saveProfiles(); renderSegs(p,ti); });
+}
+
+/* ============================ import / export ============================ */
+function exportJson(){
+  const blob = new Blob([JSON.stringify(profiles,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "spinning-profily.json"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 2000);
+}
+function importJson(file){
+  const fr = new FileReader();
+  fr.onload = () => {
+    try{
+      const j = JSON.parse(fr.result);
+      const incoming = j.playlistUri ? { [j.playlistUri]: j } : j;
+      Object.keys(incoming).forEach(k => profiles[k] = incoming[k]);
+      saveProfiles(); renderProfiles(); alert("Naimportováno.");
+    }catch(e){ alert("Soubor se nepodařilo přečíst."); }
+  };
+  fr.readAsText(file);
+}
+async function fetchProfilesFromUrl(){
+  const u = $("#profileUrl").value.trim();
+  if(!u) return;
+  LS.set("profileUrl", u); profileUrl = u;
+  try{
+    const r = await fetch(u, {cache:"no-store"});
+    if(!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    const incoming = j.playlistUri ? { [j.playlistUri]: j } : j;
+    Object.keys(incoming).forEach(k => profiles[k] = incoming[k]);
+    saveProfiles(); alert("Profily načteny z URL.");
+  }catch(e){ alert("Načtení z URL selhalo: "+e.message); }
+}
+
+/* ============================ wake lock ============================ */
+let wl = null;
+async function keepAwake(){
+  try{ if("wakeLock" in navigator && !wl){ wl = await navigator.wakeLock.request("screen");
+    wl.addEventListener("release", ()=>{ wl = null; }); } }catch(e){}
+}
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") keepAwake(); });
+
+/* ============================ události ============================ */
+$("#redirUri").textContent = redirectUri;
+$("#clientId").value = clientId;
+$("#profileUrl").value = profileUrl;
+$("#clientId").oninput = e => { clientId = e.target.value.trim(); LS.set("clientId", clientId); };
+$("#btnLogin").onclick = login;
+$("#btnFetchUrl").onclick = fetchProfilesFromUrl;
+$("#btnGoProfiles").onclick = () => { renderProfiles(); show("profiles"); };
+$("#btnProfBack").onclick = () => { show(tokens?"main":"setup"); render(); };
+$("#btnSetup").onclick = () => show("setup");
+$("#btnEdBack").onclick = () => { renderProfiles(); show("profiles"); };
+$("#btnMenu").onclick = () => { renderProfiles(); show("profiles"); };
+$("#btnBuild").onclick = () => buildFromPlaylist($("#newPlaylist").value);
+$("#btnBuildCurrent").onclick = () => { if(!S.ctxUri) alert("Teď nehraje žádný playlist."); else buildFromPlaylist(S.ctxUri); };
+$("#btnExport").onclick = exportJson;
+$("#btnImport").onclick = () => $("#fileImport").click();
+$("#fileImport").onchange = e => { if(e.target.files[0]) importJson(e.target.files[0]); };
+$("#profToggle").onclick = () => { S.fullOpen = !S.fullOpen; render(); };
+$("#btnPrev").onclick = doPrev;
+$("#btnPlay").onclick = () => { keepAwake(); doPlay(); };
+$("#btnNext").onclick = doNext;
+
+/* ============================ start ============================ */
+(async function init(){
+  const q = new URLSearchParams(location.search);
+  if(q.get("code")){
+    try{ await exchangeCode(q.get("code")); }catch(e){ alert(e.message); }
+    history.replaceState({}, "", redirectUri);
+  } else if(q.get("error")){
+    history.replaceState({}, "", redirectUri);
+  }
+  if(!tokens){ show("setup"); return; }
+  show("main");
+  await poll();
+  await shuffleOff();
+  keepAwake();
+  render();
+  setInterval(poll, POLL_MS);
+  setInterval(render, TICK_MS);
+})();
+</script>
+</body>
+</html>
